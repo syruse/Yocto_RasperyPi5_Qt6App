@@ -1,0 +1,20 @@
+<RCC>
+    <qresource prefix="/images">
+        <file>app_bg.png</file>
+        <file>alien.jpg</file>
+        <file>ballerina.jpg</file>
+        <file>hobbit.jpg</file>
+        <file>jurassic.jpg</file>
+        <file>terminator.jpg</file>
+        <file>bg.png</file>
+    </qresource>
+    <qresource prefix="/qmls">
+        <file>Main.qml</file>
+    </qresource>
+    <qresource prefix="/">
+        <file>fonts/Junicode-Bold.ttf</file>
+        <file>fonts/Junicode-BoldItalic.ttf</file>
+        <file>fonts/Junicode-Italic.ttf</file>
+        <file>fonts/Junicode.ttf</file>
+    </qresource>
+</RCC>

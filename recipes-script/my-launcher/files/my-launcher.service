@@ -1,0 +1,13 @@
+[Unit]
+Description=My Launcher Script
+After=getty.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/my-launcher.sh
+User=root
+WorkingDirectory=/
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

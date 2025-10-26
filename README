@@ -1,0 +1,12 @@
+source poky/oe-init-build-env build_pi
+bitbake core-image-minimal
+export XDG_RUNTIME_DIR=/tmp
+
+create eglfs.json
+       { "device": "/dev/dri/card0" }
+export QT_QPA_EGLFS_KMS_CONFIG=/path/to/eglfs.json
+export QT_QPA_PLATFORM=eglfs
+qt_app
+
+Note: there is systemd script which launch qt app over eglfs plugin
+build_pi contains conf content needed to be modified at your build dir
