@@ -1,6 +1,8 @@
 [Unit]
 Description=My Launcher Script
 After=getty.target
+# Wayting for psplash screen appearance
+# After=psplash-start.service
 
 [Service]
 Type=oneshot

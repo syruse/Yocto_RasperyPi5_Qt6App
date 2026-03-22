@@ -1,9 +1,16 @@
 #!/bin/sh
 #echo "Running my custom script..."
 
-systemctl stop getty@tty1
-echo 0 | tee /sys/class/graphics/fbcon/cursor_blink
-cat /dev/zero > /dev/fb0
+# Allow the user to see the logo for 3s
+# sleep 3
+
+#systemctl stop getty@tty1
+#echo 0 | tee /sys/class/graphics/fbcon/cursor_blink
+
+# Optional: we have underlying fb0 layer with splash screen 
+# which stays on the bg until shutdown and takes some RAM ~4MB (fb0 for splash and drm for qt)
+# psplash-write "QUIT" || killall psplash
+# cat /dev/zero > /dev/fb0
 
 # this is wayland compositor
 #export XDG_RUNTIME_DIR=/tmp
