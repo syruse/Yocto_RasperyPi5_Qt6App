@@ -8,9 +8,19 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Quick)
 
+find_package(PkgConfig REQUIRED)
+# wpa_supplicant often provides an interface via libwpa_client
+# pkg_check_modules looks for .pc file when find_package looks for .cmake file
+# which is not shipped by wpa_supplicant
+# pkg_check_modules(WPA_CTRL REQUIRED libwpa_client) # it must return WPA_CTRL_INCLUDE_DIRS but .pc is not shipped as well
+
+# find libwpa_client.so in sysroot 
+find_path(WPA_CTRL_INC wpa_ctrl.h)
+find_library(WPA_CLIENT_LIB wpa_client)
 
 qt_add_executable(appHMI
     main.cpp
+    wpaController.cpp
 )
 
 qt_add_qml_module(appHMI
@@ -37,6 +47,10 @@ set_target_properties(appHMI PROPERTIES
 target_link_libraries(appHMI
     PRIVATE Qt6::Quick
 )
+
+# wpa_suplicant depandancy
+target_include_directories(appHMI PRIVATE ${WPA_CTRL_INC})
+target_link_libraries(appHMI PRIVATE ${WPA_CLIENT_LIB})
 
 include(GNUInstallDirs)
 install(TARGETS appHMI

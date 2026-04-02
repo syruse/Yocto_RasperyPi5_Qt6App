@@ -3,6 +3,10 @@
 #include <QQmlApplicationEngine>
 #include <QCursor>
 
+#include <QDebug>
+#include <QThread>
+#include "wpaController.h"
+
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
@@ -30,6 +34,15 @@ int main(int argc, char *argv[])
         },
         Qt::QueuedConnection);
     engine.load(url);
+
+    WPAController wpaCtrl;
+    while (!wpaCtrl.init()) {
+        qDebug() << "wpa_supplicant socket is not created yet";
+        QThread::msleep(200);
+    }
+    qDebug() << "wpaCtrl is ready";
+
+    wpaCtrl.scan();
 
     return app.exec();
 }

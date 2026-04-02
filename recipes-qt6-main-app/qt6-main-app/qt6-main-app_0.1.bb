@@ -1,8 +1,8 @@
 SUMMARY = "qt6 based main app"
 LICENSE = "CLOSED"
 
-DEPENDS += " cmake qtbase qtdeclarative qtdeclarative-native "
-RDEPENDS${PN} += " qtbase qtdeclarative "
+DEPENDS += " cmake qtbase qtdeclarative qtdeclarative-native wpa-supplicant "
+RDEPENDS:${PN} += " qtbase qtdeclarative wpa-supplicant"
 
 SRC_URI = "file://HMI "
 S = "${UNPACKDIR}/HMI"
@@ -10,3 +10,6 @@ S = "${UNPACKDIR}/HMI"
 inherit pkgconfig qt6-cmake
 
 EXTRA_OECMAKE = " --debug-find-pkg=Qt6Quick "
+
+# wpa_client.so installed manually abd Yocto is confused
+INSANE_SKIP:${PN} += "file-rdeps"
