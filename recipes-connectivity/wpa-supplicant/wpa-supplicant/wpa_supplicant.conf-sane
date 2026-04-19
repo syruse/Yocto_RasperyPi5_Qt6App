@@ -4,6 +4,9 @@ update_config=1
 country=UA
 
 network={
-    ssid="darynaWiFi"
+    ssid="darynaWiFi_IoT"
     psk="1834625mala"
+    # Disable PFM protection since we our driver can not work with WiFi7 network
+    # we want to work over WPA2, we doesn't support WPA3
+    ieee80211w=0
 }

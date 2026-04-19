@@ -1,14 +1,17 @@
 #include <QGuiApplication>
 #include <QFontDatabase>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
 #include <QCursor>
+#include <QTimer>
+#include <QQuickStyle>
 
-#include <QDebug>
-#include <QThread>
-#include "wpaController.h"
+#include "WiFiNetworksList.h"
 
 int main(int argc, char *argv[])
 {
+    QQuickStyle::setStyle("Basic"); // Force a customizable style
+
     QGuiApplication app(argc, argv);
 
     qint32 fontId = QFontDatabase::addApplicationFont(":/fonts/Junicode.ttf");
@@ -19,9 +22,13 @@ int main(int argc, char *argv[])
     }
 
     // Hide the cursor using a blank cursor
-    app.setOverrideCursor(QCursor(Qt::BlankCursor));
+    //app.setOverrideCursor(QCursor(Qt::BlankCursor));
 
+    WiFiNetworksList wifiNetworksList;
     QQmlApplicationEngine engine;
+
+    engine.rootContext()->setContextProperty("wifiNetworksList", &wifiNetworksList);
+
     engine.addImportPath("qrc:/qmls/");
     const QUrl url(QStringLiteral("qrc:/qmls/Main.qml"));
     QObject::connect(
@@ -34,15 +41,6 @@ int main(int argc, char *argv[])
         },
         Qt::QueuedConnection);
     engine.load(url);
-
-    WPAController wpaCtrl;
-    while (!wpaCtrl.init()) {
-        qDebug() << "wpa_supplicant socket is not created yet";
-        QThread::msleep(200);
-    }
-    qDebug() << "wpaCtrl is ready";
-
-    wpaCtrl.scan();
 
     return app.exec();
 }

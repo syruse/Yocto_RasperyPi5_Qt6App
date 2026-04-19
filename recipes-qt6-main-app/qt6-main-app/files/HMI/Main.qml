@@ -9,7 +9,7 @@ Window {
 
     Image {
         id: id_bg
-        source: "qrc:/images/bg.png"
+        source: "qrc:/images/bg/bg.png"
         width: parent.width
         height: parent.height
         anchors.centerIn: parent
@@ -22,6 +22,16 @@ Window {
         height: 0.6 * parent.height
         anchors.right: parent.right
         anchors.top: parent.top
+    }
+
+    Settings {
+        id: idSettings
+        anchors.top: parent.top
+        anchors.left: parent.left
+        width: 0.25 * parent.width
+        height: 0.55 * parent.height
+
+        wifiModel: wifiNetworksList
     }
 
     Container {
@@ -37,23 +47,23 @@ Window {
                 id: id_listModel
                 ListElement {
                     name: "Alien"
-                    bg_src: "qrc:/images/alien.jpg"
+                    bg_src: "qrc:/images/bg/alien.jpg"
                 }
                 ListElement {
                     name: "Ballerina"
-                    bg_src: "qrc:/images/ballerina.jpg"
+                    bg_src: "qrc:/images/bg/ballerina.jpg"
                 }
                 ListElement {
                     name: "Jurassic World"
-                    bg_src: "qrc:/images/jurassic.jpg"
+                    bg_src: "qrc:/images/bg/jurassic.jpg"
                 }
                 ListElement {
                     name: "Hobbit"
-                    bg_src: "qrc:/images/hobbit.jpg"
+                    bg_src: "qrc:/images/bg/hobbit.jpg"
                 }
                 ListElement {
                     name: "Terminator"
-                    bg_src: "qrc:/images/terminator.jpg"
+                    bg_src: "qrc:/images/bg/terminator.jpg"
                 }
             }
             snapMode: ListView.SnapOneItem

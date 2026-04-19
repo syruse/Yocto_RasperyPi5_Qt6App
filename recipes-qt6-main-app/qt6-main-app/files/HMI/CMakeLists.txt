@@ -6,7 +6,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Quick)
+find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2)
 
 find_package(PkgConfig REQUIRED)
 # wpa_supplicant often provides an interface via libwpa_client
@@ -20,7 +20,8 @@ find_library(WPA_CLIENT_LIB wpa_client)
 
 qt_add_executable(appHMI
     main.cpp
-    wpaController.cpp
+    WPAController.cpp
+	WiFiNetworksList.cpp
 )
 
 qt_add_qml_module(appHMI
@@ -28,9 +29,11 @@ qt_add_qml_module(appHMI
     VERSION 1.0
     QML_FILES
         Main.qml
-        RESOURCES res.qrc
-        QML_FILES
-        QML_FILES
+        Settings.qml
+    RESOURCES
+        res.qrc
+    SOURCES
+        WiFiNetworksList.h WiFiNetworksList.cpp
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
@@ -45,7 +48,7 @@ set_target_properties(appHMI PROPERTIES
 )
 
 target_link_libraries(appHMI
-    PRIVATE Qt6::Quick
+    PRIVATE Qt6::Quick Qt6::QuickControls2
 )
 
 # wpa_suplicant depandancy

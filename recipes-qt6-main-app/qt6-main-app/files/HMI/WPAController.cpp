@@ -1,4 +1,4 @@
-#include "wpaController.h"
+#include "WPAController.h"
 #include <iostream>
 #include <sstream>
 #include <cstring>
@@ -104,6 +104,7 @@ void WPAController::scan() {
     if (!ctrl_conn) return;
 
     std::string res;
+    QList<Networks> foundNetworks;
     std::cout << "Starting scan..." << std::endl;
     
     // Trigger the scan
@@ -144,6 +145,8 @@ void WPAController::scan() {
                     int quality = dbmToQuality(signalInt);
                     std::cout << "Network found: " << ssid << " [Quality: " << quality << "]" 
                     << " [Connected: " << isConnected << "]" << " [Frequency: " << formatFrequency(freq) << "]" << std::endl;
+
+                    foundNetworks.append({QString::fromStdString(ssid), quality});
                 }
             }
         }
@@ -151,6 +154,8 @@ void WPAController::scan() {
     else {
         std::cerr << "Couldn't get result" << std::endl;
     }
+
+    emit resultsReady(foundNetworks);
 }
 
 std::string WPAController::getActiveSSID() {
