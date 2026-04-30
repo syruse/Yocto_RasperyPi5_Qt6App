@@ -7,6 +7,23 @@
 #include <charconv> // std::from_chars
 
 namespace {
+template <typename... Args>
+void log_info(Args... args) {
+  ((std::cout << " " << args), ...) << std::endl;
+}
+template <typename... Args>
+void log_err(Args... args) {
+  ((std::cerr << " " << args), ...) << std::endl;
+}
+#ifdef NDEBUG
+#define log_debug(...) ((void)0)
+#else
+template <typename... Args>
+void log_debug(Args... args) {
+  log_info(args...);
+}
+#endif
+
 int safeStoi(const std::string& str, int defaultValue = -100) {
     int value = 0;
     auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), value);
@@ -59,7 +76,7 @@ std::string formatFrequency(const std::string& freqStr) {
 }
 
 
-WPAController::WPAController() : ctrl_conn(nullptr) {}
+WPAController::WPAController() : m_ctrl_conn(nullptr) {}
 
 WPAController::~WPAController() {
     close_connection();
@@ -67,25 +84,67 @@ WPAController::~WPAController() {
 
 bool WPAController::init(const std::string& interface) {
     close_connection();
+
+    m_stop_thread = false;
     std::string path = "/var/run/wpa_supplicant/" + interface;
-    ctrl_conn = wpa_ctrl_open(path.c_str());
+    m_ctrl_conn = wpa_ctrl_open(path.c_str());
     
-    if (!ctrl_conn) {
-        std::cerr << "Error: failed to open control socket for " << interface << std::endl;
+    if (!m_ctrl_conn) {
+        log_err("Error: failed to open control socket for ", interface);
         return false;
     }
+
+    // open the socket for monitoring the events
+    m_monitor_conn = wpa_ctrl_open(path.c_str());
+    if (!m_monitor_conn) {
+        wpa_ctrl_close(m_ctrl_conn);
+        log_err("Error: failed to open monitor socket for ", interface);
+        return false;
+    }
+    // Attach the monitor socket to receive async events
+    if (wpa_ctrl_attach(m_monitor_conn) != 0) {
+        log_err("Error: failed to attach monitor");
+        wpa_ctrl_close(m_monitor_conn);
+        wpa_ctrl_close(m_ctrl_conn);
+        return false;
+    }
+    int sock_fd = wpa_ctrl_get_fd(m_monitor_conn);
+    m_epoll_fd = epoll_create1(0);
+    if (m_epoll_fd == -1) {
+        wpa_ctrl_close(m_monitor_conn);
+        wpa_ctrl_close(m_ctrl_conn);
+        return false;
+    }
+    struct epoll_event ev;
+    // only input events (wpa_supplicant will write to this socket when events occur)
+    ev.events = EPOLLIN;
+    ev.data.fd = sock_fd;
+    if (epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, sock_fd, &ev) == -1) {
+        close(m_epoll_fd);
+        wpa_ctrl_close(m_monitor_conn);
+        wpa_ctrl_close(m_ctrl_conn);
+        return false;
+    }
+
+    m_event_thread = std::thread(&WPAController::eventLoop, this);
+
+    std::string connectedSSID = getActiveSSID();
+    removeQuaotes(connectedSSID);
+
+    emit connectedSSIDChanged(QString::fromStdString(connectedSSID));
+
     return true;
 }
 
 bool WPAController::sendCommand(const std::string& command, std::string& response, bool removeNewLineSymbols) {
-    if (!ctrl_conn) return false;
+    if (!m_ctrl_conn) return false;
 
-    std::cout << "sendCommand:" << command << std::endl;
+    log_info("sendCommand:", command);
 
     char buf[4096];
     size_t len = sizeof(buf) - 1;
     
-    if (wpa_ctrl_request(ctrl_conn, command.c_str(), command.length(), buf, &len, nullptr) < 0) {
+    if (wpa_ctrl_request(m_ctrl_conn, command.c_str(), command.length(), buf, &len, nullptr) < 0) {
         return false;
     }
     
@@ -100,66 +159,116 @@ bool WPAController::sendCommand(const std::string& command, std::string& respons
     return true;
 }
 
-void WPAController::scan() {
-    if (!ctrl_conn) return;
+bool WPAController::receiveEvent(std::string& eventStr) {
+    if (!m_monitor_conn) return false;
 
-    std::string res;
-    QList<Networks> foundNetworks;
-    std::cout << "Starting scan..." << std::endl;
-    
-    // Trigger the scan
-    if (!sendCommand("SCAN", res) || res != "OK") {
-        std::cerr << "Scan request failed" << std::endl;
-        return;
+    char buf[4096];
+    size_t len = sizeof(buf) - 1;
+
+    // Read the event from the monitor socket
+    if (wpa_ctrl_recv(m_monitor_conn, buf, &len) != 0) {
+        return false;
     }
 
-    // Wait for the scan to complete and results to be available
-    sleep(5); 
+    buf[len] = '\0';
+    eventStr = buf;
 
-    // Get scan results using the helper method
-    if (sendCommand("SCAN_RESULTS", res, false)) {
-        std::stringstream ss(res);
-        std::string line;
+    return true;
+}
+
+void WPAController::scan() {
+    if (!m_ctrl_conn) return;
+    
+    std::string res;
+    log_info("Starting scan...");
+    
+    // Just trigger the scan and exit, no sleep required
+    if (!sendCommand("SCAN", res) || res != "OK") {
+        log_err("Scan request failed");
+        return;
+    }
+}
+
+void WPAController::eventLoop() {
+    log_info("eventLoop starts...", m_stop_thread.load());
+
+    const int MAX_EVENTS = 1;
+    struct epoll_event events[MAX_EVENTS];
+
+    while (!m_stop_thread.load()) {
+        // Wait for events with a 500ms timeout to allow safe thread termination
+        int nfds = epoll_wait(m_epoll_fd, events, MAX_EVENTS, 500);
         
-        // Skip header: bssid / frequency / signal level / flags / ssid
-        if (!std::getline(ss, line)) return;
+        if (nfds == -1) {
+            if (errno == EINTR) continue;
+            break; 
+        }
+        if (nfds > 0) {
+            // Check if there are pending messages in the monitor socket
+            while (wpa_ctrl_pending(m_monitor_conn) > 0) {
+                std::string eventStr;
 
-        std::string connectedSSID = getActiveSSID();
-        removeQuaotes(connectedSSID);
-        
-        while (std::getline(ss, line)) {
-            std::stringstream lineStream(line);
-            std::string bssid, freq, signal, flags, ssid;
-            
-            // Fields are tab-separated
-            if (std::getline(lineStream, bssid, '\t') &&
-                std::getline(lineStream, freq, '\t') &&
-                std::getline(lineStream, signal, '\t') &&
-                std::getline(lineStream, flags, '\t') &&
-                std::getline(lineStream, ssid)) {
-                
-                if (!ssid.empty()) {
-                    removeQuaotes(ssid);
-                    bool isConnected = ssid == connectedSSID;
-                    int signalInt = safeStoi(signal, -100); 
-                    int quality = dbmToQuality(signalInt);
-                    std::cout << "Network found: " << ssid << " [Quality: " << quality << "]" 
-                    << " [Connected: " << isConnected << "]" << " [Frequency: " << formatFrequency(freq) << "]" << std::endl;
+                if (receiveEvent(eventStr)) {
+                    // Look for the scan completion event
+                    if (eventStr.find("CTRL-EVENT-SCAN-RESULTS") != std::string::npos) {
+                        log_info("Scan finished! Fetching results...");
+                        
+                        std::string res;
+                        QList<Networks> foundNetworks;
+                        std::map<std::string, int> bestNetworks; // unique SSIDs with their best quality
 
-                    foundNetworks.append({QString::fromStdString(ssid), quality});
+                        if (sendCommand("SCAN_RESULTS", res, false)) {
+                            std::stringstream ss(res);
+                            std::string line;
+                            
+                            // Skip header
+                            if (!std::getline(ss, line)) continue;
+
+                            while (std::getline(ss, line)) {
+                                std::stringstream lineStream(line);
+                                std::string bssid, freq, signal, flags, ssid;
+                                
+                                // Fields are tab-separated
+                                if (std::getline(lineStream, bssid, '\t') &&
+                                    std::getline(lineStream, freq, '\t') &&
+                                    std::getline(lineStream, signal, '\t') &&
+                                    std::getline(lineStream, flags, '\t') &&
+                                    std::getline(lineStream, ssid)) {
+                                    
+                                    if (!ssid.empty()) {
+                                        removeQuaotes(ssid);
+                                        
+                                        int signalInt = safeStoi(signal, -100); 
+                                        int quality = dbmToQuality(signalInt);
+                                        
+                                        log_info("Network found: ", ssid, " [Quality: ", quality, "] [Frequency: ", formatFrequency(freq), "]");
+
+                                        // Store the best quality for each SSID
+                                        auto it = bestNetworks.find(ssid);
+                                        if (it == bestNetworks.end() || quality > it->second) {
+                                            bestNetworks[ssid] = quality;
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Convert best results to QString and populate the QList
+                            for (const auto& [ssid, quality] : bestNetworks) {
+                                foundNetworks.append({QString::fromStdString(ssid), quality});
+                            }
+
+                            // Emit the signal to the GUI (Qt signals are thread-safe)
+                            emit resultsReady(foundNetworks);
+                        }
+                    }
                 }
             }
         }
     }
-    else {
-        std::cerr << "Couldn't get result" << std::endl;
-    }
-
-    emit resultsReady(foundNetworks);
 }
 
 std::string WPAController::getActiveSSID() {
-    if (!ctrl_conn) return "";
+    if (!m_ctrl_conn) return "";
 
     std::string response;
     bool isCompleted = false;
@@ -191,39 +300,55 @@ bool WPAController::select(const std::string& ssid, const std::string& password)
 
     // 1. Add new network block
     if (!sendCommand("ADD_NETWORK", res) || res == "FAIL") {
-        std::cerr << "Failed to add network" << std::endl;
+        log_err("Failed to add network");
         return false;
     }
     std::string netId = res;
 
     // 2. Set SSID (must be in quotes)
     if (!sendCommand("SET_NETWORK " + netId + " ssid \"" + ssid + "\"", res) || res != "OK") {
-        std::cerr << "Failed to set SSID" << std::endl;
+        log_err("Failed to set SSID");
         return false;
     }
 
     // 3. Set Password (PSK, must be in quotes)
     if (!sendCommand("SET_NETWORK " + netId + " psk \"" + password + "\"", res) || res != "OK") {
-        std::cerr << "Failed to set password" << std::endl;
+        log_err("Failed to set password");
         return false;
     }
 
     // 4. Select and enable this network
     if (!sendCommand("SELECT_NETWORK " + netId, res) || res != "OK") {
-        std::cerr << "Failed to select network" << std::endl;
+        log_err("Failed to select network");
         return false;
     }
 
     // 5. Make changes persistent
     sendCommand("SAVE_CONFIG", res);
 
-    std::cout << "Successfully connected to " << ssid << " (ID:" << netId << ")" << std::endl;
+    log_info("Successfully connected to ", ssid, " (ID:", netId, ")");
     return true;
 }
 
 void WPAController::close_connection() {
-    if (ctrl_conn) {
-        wpa_ctrl_close(ctrl_conn);
-        ctrl_conn = nullptr;
+    m_stop_thread = true;
+    if (m_event_thread.joinable()) {
+        m_event_thread.join();
+    }
+
+    if (m_epoll_fd != -1) {
+        close(m_epoll_fd);
+        m_epoll_fd = -1;
+    }
+
+    // close sockets and clean up
+    if (m_monitor_conn) {
+        wpa_ctrl_detach(m_monitor_conn);
+        wpa_ctrl_close(m_monitor_conn);
+        m_monitor_conn = nullptr;
+    }
+    if (m_ctrl_conn) {
+        wpa_ctrl_close(m_ctrl_conn);
+        m_ctrl_conn = nullptr;
     }
 }

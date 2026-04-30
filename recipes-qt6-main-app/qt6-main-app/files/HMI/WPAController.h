@@ -5,6 +5,9 @@
 #include <QString>
 #include <QList>
 #include <string>
+#include <sys/epoll.h>
+#include <thread>
+#include <atomic>
 #include "wpa_ctrl.h"
 
 class WPAController : public QObject {
@@ -29,11 +32,18 @@ public:
 
 signals:
     void resultsReady(const QList<WPAController::Networks> &networks);
+    void connectedSSIDChanged(const QString &ssid);
 
 private:
-    struct wpa_ctrl* ctrl_conn;
+    struct wpa_ctrl* m_ctrl_conn{nullptr};
+    struct wpa_ctrl *m_monitor_conn{nullptr};
+    int m_epoll_fd = -1;
+    std::thread m_event_thread;
+    std::atomic<bool> m_stop_thread{false};
     
     bool sendCommand(const std::string& command, std::string& response, bool removeNewLineSymbols = true);
+    bool receiveEvent(std::string& eventStr);
+    void eventLoop();
     void close_connection();
     std::string getActiveSSID();
 };

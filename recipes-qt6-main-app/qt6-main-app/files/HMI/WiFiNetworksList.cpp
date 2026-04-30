@@ -9,6 +9,10 @@ WiFiNetworksList::WiFiNetworksList(QObject *parent) : QAbstractListModel(parent)
         qDebug() << "Model updated with" << m_networks.size() << "networks";
     });
 
+    connect(&m_wpaCtrl, &WPAController::connectedSSIDChanged, this, [this](const QString &ssid) {
+        setConnectedSSID(ssid);
+    });
+
     QThread *workerThread = QThread::create([this]() {
         // waiting for wpa_supplicant socket to be created
         while (!m_wpaCtrl.init()) {
@@ -18,12 +22,21 @@ WiFiNetworksList::WiFiNetworksList(QObject *parent) : QAbstractListModel(parent)
         qDebug() << "wpaCtrl is ready";
 
         m_wpaCtrl.scan();
+        qDebug() << "Worker thread completed";
     });
 
     // Clean up the thread when it's done
     connect(workerThread, &QThread::finished, workerThread, &QObject::deleteLater);
     
     workerThread->start();
+}
+
+void WiFiNetworksList::setConnectedSSID(const QString &ssid) {
+    if (m_connectedSSID != ssid) {
+        qDebug() << "Connected SSID changed to:" << ssid;
+        m_connectedSSID = ssid;
+        emit connectedSSIDChanged();
+    }
 }
 
 int WiFiNetworksList::rowCount(const QModelIndex &parent) const {

@@ -22,7 +22,7 @@ int main(int argc, char *argv[])
     }
 
     // Hide the cursor using a blank cursor
-    //app.setOverrideCursor(QCursor(Qt::BlankCursor));
+    app.setOverrideCursor(QCursor(Qt::BlankCursor));
 
     WiFiNetworksList wifiNetworksList;
     QQmlApplicationEngine engine;

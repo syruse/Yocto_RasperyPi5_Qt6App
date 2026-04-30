@@ -70,7 +70,7 @@ Rectangle {
         id: wifiListComponent
         Rectangle {
             color: "black"
-            property bool isLoading: true
+            readonly property bool isLoading: true
 
             Column {
                 anchors.fill: parent
@@ -87,8 +87,8 @@ Rectangle {
 
                         // Back Button
                         Text {
-                            text: "❮ Back"
-                            color: "#007AFF"; font.pixelSize: 18; font.bold: true
+                            text: "< Back"
+                            color: "#007AFF"; font.pixelSize: 20; font.bold: true
                             anchors.verticalCenter: parent.verticalCenter
                             MouseArea {
                                 anchors.fill: parent
@@ -166,6 +166,8 @@ Rectangle {
                         color: "black"
                         clip: true
 
+                        property bool isConnected: model.ssid === wifiModel.connectedSSID
+
                         // Smooth height transition
                         Behavior on height { NumberAnimation { duration: 200 } }
 
@@ -175,61 +177,115 @@ Rectangle {
                             spacing: 10
 
                             // 1. Top Row (Always visible)
-                            Row {
+                            Item {
                                 width: parent.width
                                 height: 40
-                                spacing: 15
 
                                 Image {
-                                    source: quality <= 25 ? "qrc:/images/icons/wifi_1.png" : quality > 25 && quality < 65 ? "qrc:/images/icons/wifi_2.png" : "qrc:/images/icons/wifi_3.png"
+                                    id: wifiIcon
+                                    source: model.quality <= 25 ? "qrc:/images/icons/wifi_1.png" : model.quality > 25 && model.quality < 65 ? "qrc:/images/icons/wifi_2.png" : "qrc:/images/icons/wifi_3.png"
                                     width: 32; height: 32
                                     fillMode: Image.PreserveAspectFit
                                     anchors.verticalCenter: parent.verticalCenter
+                                    anchors.left: parent.left
                                 }
 
                                 Text {
-                                    text: ssid
-                                    color: "white"; font.pixelSize: 16
+                                    text: model.ssid
+                                    color: "white"
+                                    font.pixelSize: 16
                                     anchors.verticalCenter: parent.verticalCenter
+                                    anchors.left: wifiIcon.right
+                                    anchors.leftMargin: 15
+                                    anchors.right: statusText.left
+                                    anchors.rightMargin: 10
+                                    elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    id: statusText
+                                    text: "(Connected)"
+                                    color: "#a0a0a0"
+                                    font.pixelSize: 15
+                                    font.bold: true
+                                    font.italic: true
+                                    visible: itemDelegate.isConnected
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 10
                                 }
                             }
 
                             // 2. Expandable Section (Visible only when selected)
-                            Row {
+                            Item {
                                 width: parent.width
                                 height: 40
-                                spacing: 10
                                 visible: wifiListView.selectedIndex === index
                                 opacity: visible ? 1 : 0
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
-
-                                TextField {
-                                    id: passwordField
-                                    placeholderText: "Enter password"
-                                    width: parent.width * 0.6
-                                    color: "white"
-                                    //echoMode: TextInput.Password
-                                    background: Rectangle {
-                                        color: "#1a1a1a"
-                                        border.color: "#007AFF"
-                                        border.width: 1
+                    
+                                // --- BLOCK A: FOR DISCONNECTED NETWORKS ---
+                                Row {
+                                    anchors.fill: parent
+                                    spacing: 10
+                                    visible: !itemDelegate.isConnected // Show only if NOT connected
+                    
+                                    TextField {
+                                        id: passwordField
+                                        placeholderText: "Enter password"
+                                        width: parent.width * 0.65
+                                        color: "white"
+                                        //echoMode: TextInput.Password // Masks the password input
+                                        verticalAlignment: TextInput.AlignVCenter
+                                        background: Rectangle {
+                                            color: "#1a1a1a"
+                                            border.color: "#007AFF"
+                                            border.width: 1
+                                        }
+                                    }
+                    
+                                    Button {
+                                        text: "Connect"
+                                        width: parent.width - passwordField.width - parent.spacing
+                                        contentItem: Text {
+                                            text: parent.text
+                                            color: "white"
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                        background: Rectangle {
+                                            color: parent.pressed ? "#005bb5" : "#007AFF"
+                                            radius: 4
+                                        }
+                                        onClicked: {
+                                            console.log("Connecting to " + model.ssid + " with pass: " + passwordField.text)
+                                            // Trigger C++ method here: wifiModel.connect(model.ssid, passwordField.text)
+                                        }
                                     }
                                 }
-
+                    
+                                // --- BLOCK B: FOR THE CURRENTLY CONNECTED NETWORK ---
                                 Button {
-                                    text: "Connect"
-                                    width: parent.width * 0.3
+                                    text: "Disconnect"
+                                    anchors.fill: parent
+                                    visible: itemDelegate.isConnected // Show only if already connected
+                                    
                                     contentItem: Text {
                                         text: parent.text
                                         color: "white"
+                                        font.bold: true
                                         horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
                                     }
                                     background: Rectangle {
-                                        color: parent.pressed ? "#005bb5" : "#007AFF"
+                                        color: parent.pressed ? "#b52a2a" : "#D32F2F" // Red color for destructive action
                                         radius: 4
+                                        border.color: "#ff6666"
+                                        border.width: parent.pressed ? 2 : 0
                                     }
                                     onClicked: {
-                                        console.log("Connecting to " + ssid + " with pass: " + passwordField.text)
+                                        console.log("Disconnecting from " + model.ssid)
+                                        // Trigger C++ method here: wifiModel.disconnectNetwork()
                                     }
                                 }
                             }
