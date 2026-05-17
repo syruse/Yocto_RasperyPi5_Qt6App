@@ -30,6 +30,9 @@ public:
     // Configure a new network and connect to it
     bool select(const std::string& ssid, const std::string& password);
 
+    // Disconnect from the current network
+    bool disconnectNetwork();
+
 signals:
     void resultsReady(const QList<WPAController::Networks> &networks);
     void connectedSSIDChanged(const QString &ssid);
@@ -45,7 +48,8 @@ private:
     bool receiveEvent(std::string& eventStr);
     void eventLoop();
     void close_connection();
-    std::string getActiveSSID();
+    // Get and Update the currently connected SSID
+    bool checkActiveSSID();
 };
 
 // Register the Networks struct as a Qt metatype for use in signals/slots in QThreads

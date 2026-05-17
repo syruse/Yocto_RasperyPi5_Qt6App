@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <algorithm>
 #include <charconv> // std::from_chars
+#include <QTimer>
 
 namespace {
 template <typename... Args>
@@ -127,11 +128,6 @@ bool WPAController::init(const std::string& interface) {
     }
 
     m_event_thread = std::thread(&WPAController::eventLoop, this);
-
-    std::string connectedSSID = getActiveSSID();
-    removeQuaotes(connectedSSID);
-
-    emit connectedSSIDChanged(QString::fromStdString(connectedSSID));
 
     return true;
 }
@@ -259,6 +255,20 @@ void WPAController::eventLoop() {
 
                             // Emit the signal to the GUI (Qt signals are thread-safe)
                             emit resultsReady(foundNetworks);
+
+                            // Wait for the active connection to be established if we have a connected SSID
+                            int retryCount = 0;
+                            while (!checkActiveSSID()) {
+                                if (++retryCount >= 5) {
+                                    log_err("Failed to establish active connection after 5 attempts");
+                                    break;
+                                }
+                                else
+                                {
+                                    log_info("Waiting for active connection to be established... Attempt ", retryCount);
+                                }
+                                std::this_thread::sleep_for(std::chrono::seconds(2));
+                            }
                         }
                     }
                 }
@@ -267,23 +277,37 @@ void WPAController::eventLoop() {
     }
 }
 
-std::string WPAController::getActiveSSID() {
-    if (!m_ctrl_conn) return "";
-
+bool WPAController::checkActiveSSID() {
     std::string response;
     bool isCompleted = false;
     std::string ssid{};
 
-    if (sendCommand("STATUS", response, false)) {
+    if (m_ctrl_conn && sendCommand("STATUS", response, false)) {
         std::stringstream ss(response);
         std::string line;
         
         // Parse the status output line by line
         while (std::getline(ss, line)) {
-            // we exclude ASSOCIATING and 4WAY_HANDSHAKE statuses
-            // we need really connected network
-            if (line == "wpa_state=COMPLETED") {
-                isCompleted = true;
+            // we can exclude ASSOCIATING and 4WAY_HANDSHAKE statuses
+            // to get really connected network
+            if (line.find("wpa_state=") == 0) {
+                std::string state = line.substr(10);
+
+                if (state == "DISCONNECTED" || state == "INACTIVE" || state == "INTERFACE_DISABLED") {
+                    emit connectedSSIDChanged(QString());
+                    log_info("No active connection. State: ", state);
+                    break;
+                }
+
+                if (state == "AUTHENTICATING" || state == "SCANNING" || state == "ASSOCIATING" ||
+                    state == "4WAY_HANDSHAKE" || state == "GROUP_HANDSHAKE" || state == "ASSOCIATED") {
+                    log_info("Currently connecting... State: ", state);
+                    return false; // Not fully connected yet, wait for completion
+                }
+
+                if (state == "COMPLETED") {
+                    isCompleted = true;
+                }
             }
             // Standard wpa_supplicant status output uses "ssid=NetworkName"
             if (line.compare(0, 5, "ssid=") == 0) {
@@ -291,8 +315,11 @@ std::string WPAController::getActiveSSID() {
             }
         }
     }
-    
-    return isCompleted ? ssid : ""; // Return empty string if not connected or command failed
+
+    removeQuaotes(ssid);
+    emit connectedSSIDChanged(QString::fromStdString(ssid));
+    log_info("Current connected SSID: ", ssid.empty() ? "None" : ssid);
+    return true;
 }
 
 bool WPAController::select(const std::string& ssid, const std::string& password) {
@@ -327,6 +354,22 @@ bool WPAController::select(const std::string& ssid, const std::string& password)
     sendCommand("SAVE_CONFIG", res);
 
     log_info("Successfully connected to ", ssid, " (ID:", netId, ")");
+    emit connectedSSIDChanged(QString::fromStdString(ssid));
+
+    return true;
+}
+
+bool WPAController::disconnectNetwork() {
+    std::string res;
+
+    if (!sendCommand("DISCONNECT", res) || res != "OK") {
+        log_err("Failed to disconnect from network");
+        return false;
+    }
+
+    log_info("Successfully disconnected from current network");
+    emit connectedSSIDChanged(QString());
+
     return true;
 }
 

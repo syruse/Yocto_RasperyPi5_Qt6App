@@ -4,6 +4,12 @@ LICENSE = "CLOSED"
 DEPENDS += " cmake qtbase qtdeclarative qtdeclarative-native wpa-supplicant "
 RDEPENDS:${PN} += " qtbase qtdeclarative wpa-supplicant"
 
+# for virtual keyboard support
+RDEPENDS:${PN} += " \
+    qtvirtualkeyboard \
+    qtbase-plugins \
+    qtdeclarative-qmlplugins"
+
 SRC_URI = "file://HMI "
 S = "${UNPACKDIR}/HMI"
 

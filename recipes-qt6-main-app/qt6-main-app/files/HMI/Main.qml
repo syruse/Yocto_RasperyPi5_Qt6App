@@ -1,8 +1,9 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.VirtualKeyboard
 
 Window {
-    id: id_main
+    id: root
     width: 1980
     height: 1080
     visible: true
@@ -17,7 +18,7 @@ Window {
 
     Image {
         id: id_preview
-        source: id_listModel.get(id_list.currentIndex).bg_src
+        source: id_list.currentIndex >= 0 && id_list.currentIndex < id_list.count ? id_listModel.get(id_list.currentIndex).bg_src : ""
         width: 0.7 * parent.width
         height: 0.6 * parent.height
         anchors.right: parent.right
@@ -43,6 +44,7 @@ Window {
 
         contentItem: ListView {
             id: id_list
+            currentIndex: 0
             model: ListModel {
                 id: id_listModel
                 ListElement {
@@ -72,8 +74,8 @@ Window {
             anchors.fill: parent
 
             delegate: Rectangle {
-                width: 0.2 * id_main.width + (ListView.isCurrentItem ? 0.03 * id_main.width : 0)
-                height: 0.2 * id_main.height + (ListView.isCurrentItem ? 0.03 * id_main.height : 0)
+                width: 0.2 * root.width + (ListView.isCurrentItem ? 0.03 * root.width : 0)
+                height: 0.2 * root.height + (ListView.isCurrentItem ? 0.03 * root.height : 0)
 
                 Image {
                     id: id_butIm
@@ -115,6 +117,30 @@ Window {
                     }
                 }
             }
+        }
+    }
+
+    // Virtual Keyboard
+    InputPanel {
+        id: inputPanel
+        z: 99 // top layer
+        y: root.height // start hidden below the screen
+        anchors.left: parent.left
+        anchors.right: parent.right
+
+        // show the input panel when it becomes active(TextInput gets focus)
+        states: State {
+            name: "visible"
+            when: inputPanel.active
+            PropertyChanges {
+                target: inputPanel
+                y: root.height - inputPanel.height
+            }
+        }
+
+        transitions: Transition {
+            from: ""; to: "visible"; reversible: true
+            NumberAnimation { properties: "y"; duration: 250; easing.type: Easing.OutCubic }
         }
     }
 

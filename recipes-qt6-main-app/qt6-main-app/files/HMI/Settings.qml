@@ -48,7 +48,6 @@ Rectangle {
 
                     Row {
                         anchors.fill: parent; anchors.leftMargin: 20; spacing: 15
-                        Text { text: "🌐"; font.pixelSize: 20; anchors.verticalCenter: parent.verticalCenter }
                         Text {
                             text: "WiFi"
                             color: "white"; font.pixelSize: 18
@@ -58,7 +57,11 @@ Rectangle {
 
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: settingsStack.push(wifiListComponent) // Switch to WiFi
+                        onClicked: {
+                            console.debug("WiFi menu clicked, refreshing network list");
+                            wifiModel.refresh(); // Trigger WiFi scan
+                            settingsStack.push(wifiListComponent); // Switch to WiFi
+                        }
                     }
                 }
             }
@@ -258,8 +261,8 @@ Rectangle {
                                             radius: 4
                                         }
                                         onClicked: {
-                                            console.log("Connecting to " + model.ssid + " with pass: " + passwordField.text)
-                                            // Trigger C++ method here: wifiModel.connect(model.ssid, passwordField.text)
+                                            console.debug("Connecting to " + model.ssid + " with pass: " + passwordField.text);
+                                            wifiModel.connectToNetwork(model.ssid, passwordField.text);
                                         }
                                     }
                                 }
@@ -284,8 +287,8 @@ Rectangle {
                                         border.width: parent.pressed ? 2 : 0
                                     }
                                     onClicked: {
-                                        console.log("Disconnecting from " + model.ssid)
-                                        // Trigger C++ method here: wifiModel.disconnectNetwork()
+                                        console.debug("Disconnecting from " + model.ssid)
+                                        wifiModel.disconnectFromNetwork();
                                     }
                                 }
                             }

@@ -28,6 +28,8 @@ echo '{ "device": "/dev/dri/card0" }' >> ${QT_EGLFS_CONFIG}
 export QT_QPA_PLATFORM=eglfs
 export QT_QPA_EGLFS_KMS_CONFIG=${QT_EGLFS_CONFIG}
 export QT_QPA_EGLFS_HIDECURSOR=1
+# for virtual keyboard support
+export QT_IM_MODULE=qtvirtualkeyboard
 appHMI
 
 exit 0

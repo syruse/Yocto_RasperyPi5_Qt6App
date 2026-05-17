@@ -1,5 +1,6 @@
 #include "WiFiNetworksList.h"
 #include <QThread>
+#include <QTimer>
 
 WiFiNetworksList::WiFiNetworksList(QObject *parent) : QAbstractListModel(parent) {
     connect(&m_wpaCtrl, &WPAController::resultsReady, this, [this](const QList<WPAController::Networks> &networks) {
@@ -7,6 +8,18 @@ WiFiNetworksList::WiFiNetworksList(QObject *parent) : QAbstractListModel(parent)
         m_networks = networks;
         endResetModel();
         qDebug() << "Model updated with" << m_networks.size() << "networks";
+        if (m_networks.isEmpty()) {
+            if (++m_scanRetryCount >= 5) {
+                qDebug() << "No networks found after 5 attempts, giving up.";
+            } else {
+                qDebug() << "No networks found, retrying scan... Attempt" << m_scanRetryCount;
+                QTimer::singleShot(1500, this, [this]() {
+                    m_wpaCtrl.scan();
+                });
+            }
+        } else {
+            m_scanRetryCount = 0; // reset retry count on success
+        }
     });
 
     connect(&m_wpaCtrl, &WPAController::connectedSSIDChanged, this, [this](const QString &ssid) {
@@ -29,6 +42,22 @@ WiFiNetworksList::WiFiNetworksList(QObject *parent) : QAbstractListModel(parent)
     connect(workerThread, &QThread::finished, workerThread, &QObject::deleteLater);
     
     workerThread->start();
+}
+
+void WiFiNetworksList::refresh() {
+    qDebug() << "Refreshing WiFi networks list...";
+    m_scanRetryCount = 0;
+    m_wpaCtrl.scan();
+}
+
+bool WiFiNetworksList::connectToNetwork(const QString &ssid, const QString &password) {
+    qDebug() << "Attempting to connect to network:" << ssid << "with password:" << password;
+    return m_wpaCtrl.select(ssid.toStdString(), password.toStdString());
+}
+
+bool WiFiNetworksList::disconnectFromNetwork() {
+    qDebug() << "Attempting to disconnect from current network";
+    return m_wpaCtrl.disconnectNetwork();
 }
 
 void WiFiNetworksList::setConnectedSSID(const QString &ssid) {
