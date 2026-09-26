@@ -31,7 +31,7 @@ private:
     QString m_connectedSSID;
     QList<WPAController::Networks> m_networks;
     WPAController m_wpaCtrl;
-    qint32_t m_scanRetryCount{0};
+    qint32 m_scanRetryCount{0};
 };
 
 #endif // WIFINETWORKSLIST_H
